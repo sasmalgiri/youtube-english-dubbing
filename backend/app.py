@@ -672,9 +672,11 @@ def _run_job_split(job: Job, req: JobCreateRequest, voice: str):
             use_cosyvoice=req.use_cosyvoice, use_chatterbox=req.use_chatterbox, use_elevenlabs=req.use_elevenlabs,
             use_google_tts=req.use_google_tts, use_coqui_xtts=req.use_coqui_xtts,
             use_edge_tts=req.use_edge_tts, prefer_youtube_subs=False,
+            use_yt_translate=False,
             multi_speaker=req.multi_speaker, audio_priority=req.audio_priority,
             audio_bitrate=req.audio_bitrate, encode_preset=req.encode_preset,
             fast_assemble=req.fast_assemble,
+            enable_manual_review=req.enable_manual_review,
         )
         p = Pipeline(cfg, on_progress=callback, cancel_check=job.cancel_event.is_set)
         p.video_title = job.video_title
@@ -739,11 +741,13 @@ def _run_job_split(job: Job, req: JobCreateRequest, voice: str):
             use_coqui_xtts=req.use_coqui_xtts,
             use_edge_tts=req.use_edge_tts,
             prefer_youtube_subs=False,
+            use_yt_translate=False,
             multi_speaker=req.multi_speaker,
             audio_priority=req.audio_priority,
             audio_bitrate=req.audio_bitrate,
             encode_preset=req.encode_preset,
             fast_assemble=req.fast_assemble,
+            enable_manual_review=req.enable_manual_review,
         )
 
         pipeline = Pipeline(cfg, on_progress=_part_callback,
@@ -758,24 +762,54 @@ def _run_job_split(job: Job, req: JobCreateRequest, voice: str):
     if not output_parts:
         raise RuntimeError("No parts were produced")
 
-    # Save all parts to titled folders
+    # Concatenate all parts into a single video
     base_title = job.video_title
+    title = _sanitize_filename(base_title or "Untitled")
+    final_out = job_dir / "dubbed.mp4"
+
+    if len(output_parts) > 1:
+        callback("assemble", 0.95, f"Concatenating {len(output_parts)} parts into final video...")
+        concat_list = work_dir / "concat_list.txt"
+        with open(concat_list, "w") as f:
+            for _, part_out in sorted(output_parts):
+                f.write(f"file '{part_out}'\n")
+        try:
+            subprocess.run(
+                [ffmpeg_path, "-y", "-f", "concat", "-safe", "0",
+                 "-i", str(concat_list), "-c", "copy", str(final_out)],
+                check=True, capture_output=True,
+            )
+            print(f"[SPLIT] Concatenated {len(output_parts)} parts → {final_out}", flush=True)
+        except Exception as e:
+            print(f"[SPLIT] Concat failed ({e}), keeping separate parts", flush=True)
+            final_out = None
+    else:
+        # Single part — just use it directly
+        final_out = output_parts[0][1]
+
+    # Save concatenated video + individual parts
     saved_parts = []
+    dest_dir = SAVED_DIR / title
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    if final_out and final_out.exists():
+        dest_full = dest_dir / f"{title}.mp4"
+        shutil.copy2(final_out, dest_full)
+        saved_parts.append(str(dest_full))
+        print(f"[SPLIT] Saved full: {dest_full}", flush=True)
+
+    # Also save individual parts for reference
     for part_num, part_out in output_parts:
-        part_title = f"{base_title} - Part {part_num}"
-        dest_dir = SAVED_DIR / part_title
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_path = dest_dir / f"{part_title}.mp4"
+        dest_path = dest_dir / f"{title} - Part {part_num}.mp4"
         shutil.copy2(part_out, dest_path)
         saved_parts.append(str(dest_path))
-        print(f"[SPLIT] Saved: {dest_path}", flush=True)
 
-    job.result_path = output_parts[0][1]  # First part for preview
-    job.saved_folder = str(SAVED_DIR / base_title) if len(output_parts) == 1 else str(SAVED_DIR)
+    job.result_path = final_out if final_out and final_out.exists() else output_parts[0][1]
+    job.saved_folder = str(dest_dir)
     job.saved_video = saved_parts[0] if saved_parts else None
     job.overall_progress = 1.0
     job.state = "done"
-    job.message = f"Complete — {len(output_parts)} parts dubbed!"
+    job.message = f"Complete — {len(output_parts)} parts dubbed and merged!"
     job.events.append({"type": "complete", "state": "done",
                        "parts": len(output_parts)})
 
