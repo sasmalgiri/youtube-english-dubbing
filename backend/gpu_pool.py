@@ -144,12 +144,16 @@ class GPUPool:
                 "use_google_tts": settings.get("use_google_tts", False),
                 "use_coqui_xtts": settings.get("use_coqui_xtts", False),
                 "use_edge_tts": settings.get("use_edge_tts", True),
+                "prefer_youtube_subs": settings.get("prefer_youtube_subs", False),
+                "use_yt_translate": settings.get("use_yt_translate", False),
                 "multi_speaker": settings.get("multi_speaker", False),
+                "transcribe_only": settings.get("transcribe_only", False),
                 "audio_priority": settings.get("audio_priority", True),
                 "audio_bitrate": settings.get("audio_bitrate", "320k"),
                 "encode_preset": settings.get("encode_preset", "medium"),
                 "split_duration": settings.get("split_duration", 0),
                 "fast_assemble": settings.get("fast_assemble", False),
+                "enable_manual_review": settings.get("enable_manual_review", True),
             }
 
             resp = _requests.post(f"{backend.url}/api/jobs", json=payload, timeout=30)

@@ -272,7 +272,6 @@ export interface LinkPreset {
     fast_assemble?: boolean;
     dub_chain?: string[];
     enable_manual_review?: boolean;
-    use_cosyvoice?: boolean;
 }
 
 export interface SavedLink {

@@ -441,8 +441,8 @@ def _run_job(job: Job, req: JobCreateRequest):
 
         # Use the requested voice, or pick default for target language
         voice = req.voice
-        if not voice or voice == "hi-IN-SwaraNeural":
-            voice = DEFAULT_VOICES.get(req.target_language, req.voice)
+        if not voice or voice in ("hi-IN-SwaraNeural", "en-US-JennyNeural"):
+            voice = DEFAULT_VOICES.get(req.target_language, "en-US-JennyNeural")
 
         # ── SPLIT MODE: Split video into parts and dub each ──────────
         if req.split_duration > 0:
@@ -1000,13 +1000,15 @@ async def create_job_upload(
     use_coqui_xtts: str = Form("false"),
     use_edge_tts: str = Form("false"),
     prefer_youtube_subs: str = Form("false"),
+    use_yt_translate: str = Form("false"),
     multi_speaker: str = Form("false"),
     transcribe_only: str = Form("false"),
     audio_priority: str = Form("true"),
-    audio_bitrate: str = Form("192k"),
-    encode_preset: str = Form("veryfast"),
+    audio_bitrate: str = Form("320k"),
+    encode_preset: str = Form("medium"),
     split_duration: int = Form(0),
-    fast_assemble: str = Form("true"),
+    fast_assemble: str = Form("false"),
+    enable_manual_review: str = Form("true"),
     voice: str = Form("en-US-JennyNeural"),
 ):
     """Create a dubbing job from an uploaded video file."""
@@ -1083,8 +1085,8 @@ def _run_job_with_srt(job: Job, req: JobCreateRequest, srt_path: Path):
         out_path = job_dir / "dubbed.mp4"
 
         voice = req.voice
-        if not voice or voice == "hi-IN-SwaraNeural":
-            voice = DEFAULT_VOICES.get(req.target_language, req.voice)
+        if not voice or voice in ("hi-IN-SwaraNeural", "en-US-JennyNeural"):
+            voice = DEFAULT_VOICES.get(req.target_language, "en-US-JennyNeural")
 
         cfg = PipelineConfig(
             source=req.url,
@@ -1199,10 +1201,11 @@ async def create_job_with_srt(
     use_edge_tts: str = Form("false"),
     multi_speaker: str = Form("false"),
     audio_priority: str = Form("true"),
-    audio_bitrate: str = Form("192k"),
-    encode_preset: str = Form("veryfast"),
+    audio_bitrate: str = Form("320k"),
+    encode_preset: str = Form("medium"),
     split_duration: int = Form(0),
-    fast_assemble: str = Form("true"),
+    fast_assemble: str = Form("false"),
+    enable_manual_review: str = Form("true"),
     voice: str = Form("en-US-JennyNeural"),
 ):
     """Create a dubbing job from a video (URL or file) + pre-translated SRT file.
@@ -1303,7 +1306,7 @@ def _job_config(job: Job) -> Dict[str, Any]:
         "ollama": "Ollama", "google": "Google Translate", "hinglish": "Hinglish AI",
     }
     return {
-        "asr_model": getattr(req, "asr_model", "large-v3"),
+        "asr_model": getattr(req, "asr_model", "large-v3-turbo"),
         "translation_engine": engine_labels.get(getattr(req, "translation_engine", "auto"), "Auto"),
         "tts_engine": tts,
         "audio_priority": getattr(req, "audio_priority", False),
@@ -1464,9 +1467,9 @@ def _run_resume(job: Job):
         # Restore TTS settings from original request
         req = job.original_req
         # Replicate voice defaulting logic from _run_job
-        voice = req.voice if req else "hi-IN-SwaraNeural"
-        if not voice or voice == "hi-IN-SwaraNeural":
-            voice = DEFAULT_VOICES.get(job.target_language, voice)
+        voice = req.voice if req else "en-US-JennyNeural"
+        if not voice or voice in ("hi-IN-SwaraNeural", "en-US-JennyNeural"):
+            voice = DEFAULT_VOICES.get(job.target_language, "en-US-JennyNeural")
         cfg = PipelineConfig(
             source="resume",
             work_dir=work_dir,

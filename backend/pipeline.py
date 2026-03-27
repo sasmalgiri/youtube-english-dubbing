@@ -6286,7 +6286,7 @@ class Pipeline:
         )
 
 
-async def list_voices(language_filter: str = "hi"):
+async def list_voices(language_filter: str = "en"):
     """List available edge-tts voices filtered by language."""
     import edge_tts
 
