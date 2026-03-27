@@ -1,0 +1,12 @@
+{
+  "_comment": "Pronunciation dictionary: maps source-language terms to target-language phonetic spellings.",
+  "_comment2": "Place this file at backend/pronunciation.json. Loaded automatically at pipeline start.",
+  "_comment3": "Keys = exact strings in the TRANSLATED text. Values = how TTS should say them.",
+  "_examples": {
+    "ChatGPT": "चैट-जी-पी-टी",
+    "GPT-4": "जी-पी-टी फोर",
+    "AI": "ए-आई",
+    "YouTube": "यूट्यूब",
+    "Netflix": "नेटफ्लिक्स"
+  }
+}

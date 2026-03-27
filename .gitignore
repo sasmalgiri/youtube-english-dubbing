@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.egg
+
+# Node
+node_modules/
+.next/
+out/
+
+# Output files (large, generated)
+backend/dubbed_outputs/
+backend/work/
+backend/completed_urls.json
+backend/saved_links.json
+output/
+dubbed/
+
+# Environment
+.env
+.env.local
+*.log
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large model files
+*.pt
+*.safetensors
+*.bin
+*.onnx

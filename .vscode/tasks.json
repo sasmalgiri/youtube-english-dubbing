@@ -1,0 +1,34 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Application",
+            "type": "shell",
+            "command": "python src/app.py",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$python"]
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "pytest tests",
+            "group": "test",
+            "problemMatcher": ["$pytest"]
+        },
+        {
+            "label": "Download Sample",
+            "type": "shell",
+            "command": "python scripts/download_sample.py",
+            "group": "none"
+        },
+        {
+            "label": "Extract Audio",
+            "type": "shell",
+            "command": "python scripts/extract_audio.py",
+            "group": "none"
+        }
+    ]
+}
