@@ -106,7 +106,7 @@ class Job:
     result_path: Optional[Path] = None
     source_url: str = ""
     video_title: str = ""
-    target_language: str = "hi"
+    target_language: str = "en"
     segments: List[Dict] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     events: List[Dict] = field(default_factory=list)
@@ -123,9 +123,9 @@ class Job:
 class JobCreateRequest(BaseModel):
     url: str
     source_language: str = "auto"
-    target_language: str = "hi"
-    voice: str = "hi-IN-SwaraNeural"
-    asr_model: str = "large-v3"
+    target_language: str = "en"
+    voice: str = "en-US-JennyNeural"
+    asr_model: str = "large-v3-turbo"
     translation_engine: str = "auto"
     tts_rate: str = "+0%"
     mix_original: bool = False
@@ -141,10 +141,10 @@ class JobCreateRequest(BaseModel):
     multi_speaker: bool = False
     transcribe_only: bool = False
     audio_priority: bool = True
-    audio_bitrate: str = "192k"
-    encode_preset: str = "veryfast"
-    split_duration: int = 0     # 0 = no split, 30/40 = split every N minutes
-    fast_assemble: bool = True  # True = instant in-memory, False = ffmpeg (preserves overlaps)
+    audio_bitrate: str = "320k"
+    encode_preset: str = "medium"
+    split_duration: int = 0
+    fast_assemble: bool = False
     dub_chain: List[str] = []  # e.g. ["en", "hi"] — dub through languages sequentially
     enable_manual_review: bool = True  # Save manual_review_queue.json for failed segments
 
@@ -987,8 +987,8 @@ def create_job(req: JobCreateRequest):
 async def create_job_upload(
     file: UploadFile = File(...),
     source_language: str = Form("auto"),
-    target_language: str = Form("hi"),
-    asr_model: str = Form("large-v3"),
+    target_language: str = Form("en"),
+    asr_model: str = Form("large-v3-turbo"),
     translation_engine: str = Form("auto"),
     tts_rate: str = Form("+0%"),
     mix_original: str = Form("false"),
@@ -1007,7 +1007,7 @@ async def create_job_upload(
     encode_preset: str = Form("veryfast"),
     split_duration: int = Form(0),
     fast_assemble: str = Form("true"),
-    voice: str = Form("hi-IN-SwaraNeural"),
+    voice: str = Form("en-US-JennyNeural"),
 ):
     """Create a dubbing job from an uploaded video file."""
     _cleanup_old_jobs()
@@ -1185,8 +1185,8 @@ async def create_job_with_srt(
     url: str = Form(""),
     video_file: Optional[UploadFile] = File(None),
     source_language: str = Form("auto"),
-    target_language: str = Form("hi"),
-    asr_model: str = Form("large-v3"),
+    target_language: str = Form("en"),
+    asr_model: str = Form("large-v3-turbo"),
     translation_engine: str = Form("auto"),
     tts_rate: str = Form("+0%"),
     mix_original: str = Form("false"),
@@ -1203,7 +1203,7 @@ async def create_job_with_srt(
     encode_preset: str = Form("veryfast"),
     split_duration: int = Form(0),
     fast_assemble: str = Form("true"),
-    voice: str = Form("hi-IN-SwaraNeural"),
+    voice: str = Form("en-US-JennyNeural"),
 ):
     """Create a dubbing job from a video (URL or file) + pre-translated SRT file.
     Skips transcription and translation — goes straight to TTS + assembly."""
