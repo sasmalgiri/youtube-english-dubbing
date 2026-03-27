@@ -375,10 +375,10 @@ class PipelineConfig:
     work_dir: Path
     output_path: Path
     source_language: str = "auto"
-    target_language: str = "hi"
+    target_language: str = "en"
     asr_model: str = "large-v3-turbo"
-    translation_engine: str = "auto"   # auto, gemini, groq, ollama, google, hinglish, nllb, nllb_polish, google_polish
-    tts_voice: str = "hi-IN-SwaraNeural"
+    translation_engine: str = "auto"   # auto, chain_dub, turbo, gemini, groq, sambanova, ollama, google, nllb, nllb_polish, google_polish
+    tts_voice: str = "en-US-JennyNeural"
     tts_rate: str = "+0%"
     mix_original: bool = False
     original_volume: float = 0.10
@@ -2635,20 +2635,39 @@ class Pipeline:
             return
 
         # Auto mode: pick best available engine by quality
-        # Priority: IndicTrans2 → Groq+SambaNova turbo rewrite → Rules  (always when LLM available)
-        #           > Turbo (raw)  > GPT-4o  > Groq  > SambaNova  > Gemini  > Ollama  > IndicTrans2  > Google
+        # For English targets: skip NLLB/IndicTrans2 (en→indic only), prefer LLM or Google
+        # For Indic targets: IndicTrans2+Polish > Turbo > LLM > Ollama > NLLB > Google
         any_llm = groq_key or sambanova_key or gemini_key
         is_hindi = self.cfg.target_language in ("hi", "hi-IN")
+        is_english_target = self.cfg.target_language == "en" or self.cfg.target_language.startswith("en-")
 
-        if any_llm:
-            # Best quality for any language: IndicTrans2 meaning → LLM turbo rewrite → (Hindi: rules)
-            turbo_label = (
-                " + ".join([n for n, _ in [("Groq", groq_key), ("SambaNova", sambanova_key)] if _])
-                + (" + Gemini" if gemini_key else "")
-            )
-            self._report("translate", 0.02,
-                         f"Auto: IndicTrans2 → {turbo_label} rewrite"
-                         + (" → Rules" if is_hindi else "") + " (best quality)...")
+        if is_english_target:
+            # English target: LLM direct translation is best (no NLLB — it only does en→indic)
+            if len(turbo_engines) >= 2:
+                names = " + ".join(e[0] for e in turbo_engines)
+                self._report("translate", 0.05, f"TURBO: {names} parallel translation to English...")
+                self._translate_segments_turbo(segments, turbo_engines)
+            elif groq_key:
+                self._report("translate", 0.05, "Using Groq (Llama 3.3 70B) for English translation...")
+                self._translate_segments_groq(segments, groq_key)
+            elif sambanova_key:
+                self._report("translate", 0.05, "Using SambaNova for English translation...")
+                self._translate_segments_sambanova(segments, sambanova_key)
+            elif openai_key:
+                self._report("translate", 0.05, "Using GPT-4o for English translation...")
+                self._translate_segments_openai(segments, openai_key)
+            elif gemini_key:
+                self._report("translate", 0.05, "Using Gemini for English translation...")
+                self._translate_segments_gemini(segments, gemini_key)
+            elif self._ollama_available():
+                self._report("translate", 0.05, "Using Ollama for English translation...")
+                self._translate_segments_ollama(segments)
+            else:
+                self._report("translate", 0.1, "Using Google Translate for English...")
+                self._translate_segments_google(segments)
+        elif is_hindi and any_llm:
+            # Best for Hindi: IndicTrans2 meaning model + LLM dubbing rewrite + rules
+            self._report("translate", 0.02, "Auto: IndicTrans2 → LLM → Rules (best Hindi quality)...")
             self._translate_segments_nllb_polish(segments)
         elif len(turbo_engines) >= 2:
             names = " + ".join(e[0] for e in turbo_engines)
@@ -2670,14 +2689,17 @@ class Pipeline:
             self._report("translate", 0.05, "Using Ollama (local LLM) for translation...")
             self._translate_segments_ollama(segments)
         else:
-            # No API keys, no Ollama — try IndicTrans2 alone, fallback to Google
-            try:
-                _get_meaning_model()
-                self._report("translate", 0.02, "Auto: Using IndicTrans2 (local, offline)...")
-                self._translate_segments_nllb(segments)
-            except Exception:
-                self._report("translate", 0.1, "No engines available, using Google Translate...")
-                self._translate_segments_google(segments)
+            # No API keys, no Ollama — try IndicTrans2 alone (only for indic targets), fallback to Google
+            if not is_english_target:
+                try:
+                    _get_meaning_model()
+                    self._report("translate", 0.02, "Auto: Using IndicTrans2 (local, offline)...")
+                    self._translate_segments_nllb(segments)
+                    return
+                except Exception:
+                    pass
+            self._report("translate", 0.1, "Using Google Translate (free fallback)...")
+            self._translate_segments_google(segments)
 
     def _translate_segments_gemini(self, segments, api_key):
         """Translate segments in numbered batches using Gemini for context-aware output."""

@@ -17,7 +17,7 @@ export default function Header() {
             </div>
             <div className="ml-auto flex items-center gap-4">
                 <span className="text-xs text-text-muted px-3 py-1 rounded-full bg-white/5 border border-border">
-                    Hindi Dubbing
+                    English Dubbing
                 </span>
             </div>
         </header>

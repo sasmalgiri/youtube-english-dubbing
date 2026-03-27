@@ -13,12 +13,12 @@ const PRESET_LABELS: { key: keyof LinkPreset; label: string; type: 'select' | 't
     {
         key: 'target_language', label: 'Language', type: 'select',
         options: [
+            { value: 'en', label: 'English' }, { value: 'es', label: 'Spanish' },
+            { value: 'fr', label: 'French' }, { value: 'de', label: 'German' },
+            { value: 'ja', label: 'Japanese' }, { value: 'ko', label: 'Korean' },
             { value: 'hi', label: 'Hindi' }, { value: 'bn', label: 'Bengali' },
             { value: 'ta', label: 'Tamil' }, { value: 'te', label: 'Telugu' },
-            { value: 'mr', label: 'Marathi' }, { value: 'ja', label: 'Japanese' },
-            { value: 'ko', label: 'Korean' }, { value: 'es', label: 'Spanish' },
-            { value: 'fr', label: 'French' }, { value: 'de', label: 'German' },
-            { value: 'en', label: 'English' },
+            { value: 'mr', label: 'Marathi' },
         ],
     },
     {

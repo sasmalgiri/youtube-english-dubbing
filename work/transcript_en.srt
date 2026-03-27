@@ -1,0 +1,23 @@
+1
+00:00:00,000 --> 00:00:03,360
+Hello and welcome to this test video.
+
+2
+00:00:03,360 --> 00:00:07,440
+This is a demonstration of the YouTube dubbing pipeline.
+
+3
+00:00:07,440 --> 00:00:11,840
+The pipeline uses Faster Whisper for speech recognition
+
+4
+00:00:11,840 --> 00:00:15,920
+and HTTS for text-to-speech synthesis.
+
+5
+00:00:15,920 --> 00:00:21,040
+With Timeline Audio, the dub speech matches the original timing.
+
+6
+00:00:21,040 --> 00:00:23,840
+Thank you for watching this demonstration.

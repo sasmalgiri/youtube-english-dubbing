@@ -137,8 +137,8 @@ export default function SettingsPanel({ settings, onChange }: SettingsPanelProps
                             {/* Chain Dub */}
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-text-primary">Chain Dub (English → Hindi)</p>
-                                    <p className="text-xs text-text-muted">Dub to English first using subs, then English to Hindi (best for non-English videos)</p>
+                                    <p className="text-sm text-text-primary">Chain Dub (Source → English)</p>
+                                    <p className="text-xs text-text-muted">Two-pass: LLM translate first, then Turbo engines refine (best for long videos)</p>
                                 </div>
                                 <button
                                     onClick={() => update({
@@ -161,7 +161,7 @@ export default function SettingsPanel({ settings, onChange }: SettingsPanelProps
                     {/* ── Translation Section ── */}
                     <div>
                         <p className="text-sm font-medium text-text-primary mb-1">Translation Engine</p>
-                        <p className="text-[10px] text-text-muted mb-3">How the transcribed text gets translated. Auto picks the best for Hindi. Chain Dub gives highest quality: IndicTrans2+ first, then Turbo engines refine the output (best for long videos).</p>
+                        <p className="text-[10px] text-text-muted mb-3">How the transcribed text gets translated. Auto picks the best engine for your target language. For English targets: LLM engines (Groq, SambaNova) are preferred. Chain Dub does two-pass refinement (best for long videos).</p>
                         <div className="grid grid-cols-5 gap-2 mb-3">
                             {[
                                 { value: 'auto', label: 'Auto', desc: 'Best available' },
@@ -187,12 +187,12 @@ export default function SettingsPanel({ settings, onChange }: SettingsPanelProps
                         </div>
                         <div className="grid grid-cols-4 gap-2">
                             {[
-                                { value: 'chain_dub', label: 'Chain Dub', desc: 'IndicTrans2+ → Turbo refine' },
-                                { value: 'nllb_polish', label: 'IndicTrans2+', desc: 'IndicTrans2 → LLM → Rules' },
+                                { value: 'chain_dub', label: 'Chain Dub', desc: 'LLM → Turbo refine' },
+                                { value: 'nllb_polish', label: 'IndicTrans2+', desc: 'Indic langs only' },
                                 { value: 'google_polish', label: 'Google+Polish', desc: 'Fast Google → LLM polish' },
                                 { value: 'nllb', label: 'IndicTrans2', desc: 'Local meaning model' },
                                 { value: 'ollama', label: 'Ollama', desc: 'Local LLM (GPU)' },
-                                { value: 'hinglish', label: 'Hinglish AI', desc: 'Custom Hindi model' },
+                                { value: 'hinglish', label: 'Hinglish AI', desc: 'Hindi-English mix' },
                                 { value: 'google', label: 'Google', desc: 'Free, basic' },
                             ].map((m) => (
                                 <button
@@ -255,13 +255,13 @@ export default function SettingsPanel({ settings, onChange }: SettingsPanelProps
                     {/* TTS Engines */}
                     <div>
                         <p className="text-sm font-medium text-text-primary mb-1">TTS Engines</p>
-                        <p className="text-[10px] text-text-muted mb-3">English dub auto-uses: Chatterbox-Turbo → Chatterbox Multilingual → XTTS v2 → Edge-TTS (all free, local). Non-English uses toggles below. CosyVoice 2 = best for Hindi.</p>
+                        <p className="text-[10px] text-text-muted mb-3">English dub auto-uses: Chatterbox-Turbo → Chatterbox Multilingual → XTTS v2 → Edge-TTS (all free, local). Non-English targets use toggles below.</p>
                         <div className="space-y-3">
                             {/* CosyVoice 2 */}
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm text-text-primary">CosyVoice 2 ⭐</p>
-                                    <p className="text-xs text-text-muted">Free, GPU, near-ElevenLabs quality, voice clones original speaker in Hindi</p>
+                                    <p className="text-xs text-text-muted">Free, GPU, near-ElevenLabs quality, voice clones original speaker</p>
                                 </div>
                                 <button
                                     type="button"

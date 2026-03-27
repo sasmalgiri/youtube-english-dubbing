@@ -97,7 +97,7 @@ export interface SSEEvent {
 
 // ── API Functions ───────────────────────────────────────────────────────────
 
-export async function fetchVoices(lang: string = 'hi'): Promise<Voice[]> {
+export async function fetchVoices(lang: string = 'en'): Promise<Voice[]> {
     const res = await fetch(`${API_BASE}/api/voices?lang=${lang}`, {
         headers: { ...EXTRA_HEADERS },
     });

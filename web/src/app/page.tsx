@@ -13,7 +13,7 @@ import { createJob, createJobUpload, createJobWithSrt, localDownloadAndDub, isRe
 export default function HomePage() {
     const router = useRouter();
     const [sourceLanguage, setSourceLanguage] = useState('auto');
-    const [targetLanguage, setTargetLanguage] = useState('hi');
+    const [targetLanguage, setTargetLanguage] = useState('en');
     const [settings, setSettings] = useState<DubbingSettings>({
         asr_model: 'large-v3-turbo',
         translation_engine: 'auto',
