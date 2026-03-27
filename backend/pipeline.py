@@ -2581,60 +2581,88 @@ class Pipeline:
 
         turbo_engines = self._get_turbo_engines()
 
+        is_english_target = self.cfg.target_language == "en" or self.cfg.target_language.startswith("en-")
+        _did_translate = False
+
         # Specific engine selected
         if engine == "turbo" and len(turbo_engines) >= 2:
             names = " + ".join(e[0] for e in turbo_engines)
             self._report("translate", 0.05, f"TURBO: {names} parallel translation ({len(turbo_engines)} engines)...")
             self._translate_segments_turbo(segments, turbo_engines)
-            return
+            _did_translate = True
         elif engine == "turbo":
             self._report("translate", 0.05, "Turbo needs 2+ engine keys, using best available...")
         elif engine == "hinglish" and self._ollama_available():
             self._report("translate", 0.05, "Using Hinglish AI (custom Ollama model)...")
             self._translate_segments_ollama(segments, force_model="hinglish-translator")
-            return
+            _did_translate = True
         elif engine == "sambanova" and sambanova_key:
             self._report("translate", 0.05, "Using SambaNova (Llama 3.3 70B) for translation...")
             self._translate_segments_sambanova(segments, sambanova_key)
-            return
+            _did_translate = True
         elif engine == "groq" and groq_key:
             self._report("translate", 0.05, "Using Groq (Llama 3.3 70B) for translation...")
             self._translate_segments_groq(segments, groq_key)
-            return
+            _did_translate = True
         elif engine == "gemini" and gemini_key:
             self._report("translate", 0.05, "Using Gemini for translation...")
             self._translate_segments_gemini(segments, gemini_key)
-            return
+            _did_translate = True
         elif engine == "ollama" and self._ollama_available():
             self._report("translate", 0.05, "Using Ollama (local LLM) for translation...")
             self._translate_segments_ollama(segments)
-            return
+            _did_translate = True
         elif engine == "chain_dub":
-            self._report("translate", 0.01, "Chain Dub: Pass 1 — IndicTrans2 → LLM → Rules...")
-            self._translate_segments_nllb_polish(segments)
+            if is_english_target:
+                # Chain Dub for English: LLM translate → Turbo refine (skip NLLB, it's en→indic only)
+                self._report("translate", 0.01, "Chain Dub (English): LLM translate → Turbo refine...")
+                if self._ollama_available():
+                    self._translate_segments_ollama(segments)
+                elif groq_key:
+                    self._translate_segments_groq(segments, groq_key)
+                elif sambanova_key:
+                    self._translate_segments_sambanova(segments, sambanova_key)
+                else:
+                    self._translate_segments_google(segments)
+            else:
+                self._report("translate", 0.01, "Chain Dub: Pass 1 — IndicTrans2 → LLM → Rules...")
+                self._translate_segments_nllb_polish(segments)
             if len(turbo_engines) >= 1:
                 names = " + ".join(e[0] for e in turbo_engines)
                 self._report("translate", 0.50, f"Chain Dub: Pass 2 — {names} refinement...")
                 self._translate_segments_turbo_refine(segments, turbo_engines)
-                self._report("translate", 0.99, f"Chain Dub complete: NLLB+Polish → {names} refine!")
+                self._report("translate", 0.99, f"Chain Dub complete → {names} refine!")
             else:
                 self._report("translate", 0.99, "Chain Dub: Refine skipped (need Groq or SambaNova key)")
-            return
+            _did_translate = True
         elif engine == "nllb_polish":
-            self._report("translate", 0.02, "Using NLLB → LLM → Rules pipeline...")
-            self._translate_segments_nllb_polish(segments)
-            return
+            if is_english_target:
+                self._report("translate", 0.05, "NLLB doesn't support English targets — using Google Translate...")
+                self._translate_segments_google(segments)
+            else:
+                self._report("translate", 0.02, "Using NLLB → LLM → Rules pipeline...")
+                self._translate_segments_nllb_polish(segments)
+            _did_translate = True
         elif engine == "nllb":
-            self._report("translate", 0.02, "Using NLLB-200 (local meaning model)...")
-            self._translate_segments_nllb(segments)
-            return
+            if is_english_target:
+                self._report("translate", 0.05, "NLLB doesn't support English targets — using Google Translate...")
+                self._translate_segments_google(segments)
+            else:
+                self._report("translate", 0.02, "Using NLLB-200 (local meaning model)...")
+                self._translate_segments_nllb(segments)
+            _did_translate = True
         elif engine == "google_polish":
             self._report("translate", 0.02, "Using Google Translate + LLM Polish...")
             self._translate_segments_google_polish(segments)
-            return
+            _did_translate = True
         elif engine == "google":
             self._report("translate", 0.1, "Using Google Translate...")
             self._translate_segments_google(segments)
+            _did_translate = True
+
+        # English dubbing rewrite: runs after ANY translation path
+        if _did_translate and is_english_target:
+            self._english_dubbing_rewrite(segments)
             return
 
         # Auto mode: pick best available engine by quality
@@ -2642,7 +2670,6 @@ class Pipeline:
         # For Indic targets: IndicTrans2+Polish > Turbo > LLM > Ollama > NLLB > Google
         any_llm = groq_key or sambanova_key or gemini_key
         is_hindi = self.cfg.target_language in ("hi", "hi-IN")
-        is_english_target = self.cfg.target_language == "en" or self.cfg.target_language.startswith("en-")
 
         if is_english_target:
             # English target: zero-spend priority = local first, then free APIs
@@ -2712,7 +2739,9 @@ class Pipeline:
         then free API engines, then skips if nothing available.
         """
         total = len(segments)
-        self._report("translate", 0.90, f"English dubbing rewrite ({total} segments)...")
+        if not segments:
+            return
+        self._report("translate", 0.80, f"English dubbing rewrite ({total} segments)...")
 
         rewrite_system = (
             "You are an English DUBBING REWRITER for YouTube videos.\n"
@@ -2746,7 +2775,7 @@ class Pipeline:
             self._report("translate", 0.95, "No rewrite engines available — using translations as-is")
             return
 
-        batch_size = 40
+        batch_size = 15  # Small batches — Ollama needs time per segment
         total_batches = (total + batch_size - 1) // batch_size
         engine_idx = 0
 
@@ -2763,7 +2792,7 @@ class Pipeline:
                 eidx = (engine_idx + attempt) % len(engine_order)
                 name, key = engine_order[eidx]
 
-                self._report("translate", 0.90 + 0.08 * (batch_idx / total_batches),
+                self._report("translate", 0.80 + 0.18 * (batch_idx / total_batches),
                              f"English rewrite: {name} — batch {batch_idx + 1}/{total_batches}")
 
                 try:
@@ -4479,6 +4508,8 @@ class Pipeline:
         try:
             import torch
             has_gpu = torch.cuda.is_available()
+            if not has_gpu and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                has_gpu = True  # Apple Silicon MPS
         except ImportError:
             pass
 
@@ -4616,8 +4647,9 @@ class Pipeline:
         import torchaudio
         from chatterbox.tts_turbo import ChatterboxTurboTTS
 
-        self._report("synthesize", 0.05, "Loading Chatterbox-Turbo (350M) on GPU...")
-        model = ChatterboxTurboTTS.from_pretrained(device="cuda")
+        device = "cuda" if torch.cuda.is_available() else "mps" if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() else "cpu"
+        self._report("synthesize", 0.05, f"Loading Chatterbox-Turbo (350M) on {device.upper()}...")
+        model = ChatterboxTurboTTS.from_pretrained(device=device)
 
         # Prepare voice reference from original audio (needs >5s)
         try:
@@ -4700,8 +4732,9 @@ class Pipeline:
 
         target = self.cfg.target_language.split("-")[0].lower()  # "en-US" → "en", "Hi" → "hi"
 
-        self._report("synthesize", 0.05, "Loading Chatterbox Multilingual on GPU...")
-        model = ChatterboxMultilingualTTS.from_pretrained(device="cuda")
+        device = "cuda" if torch.cuda.is_available() else "mps" if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() else "cpu"
+        self._report("synthesize", 0.05, f"Loading Chatterbox Multilingual on {device.upper()}...")
+        model = ChatterboxMultilingualTTS.from_pretrained(device=device)
 
         # Prepare voice reference from original audio
         try:
