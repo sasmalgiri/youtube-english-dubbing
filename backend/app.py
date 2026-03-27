@@ -869,11 +869,28 @@ def _queue_chain_next(parent_job: Job):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    """Health check — returns GPU info for pool discovery."""
+    import platform
+    gpu_info = {"gpu": "none", "vram_gb": 0}
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_info["gpu"] = torch.cuda.get_device_name(0)
+            gpu_info["vram_gb"] = round(torch.cuda.get_device_properties(0).total_mem / 1e9, 1)
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            gpu_info["gpu"] = "Apple MPS"
+            gpu_info["vram_gb"] = 0  # MPS shares system RAM
+    except ImportError:
+        pass
+    return {
+        "status": "ok",
+        "hostname": platform.node(),
+        **gpu_info,
+    }
 
 
 @app.get("/api/voices")
-async def voices(lang: str = "hi") -> Any:
+async def voices(lang: str = "en") -> Any:
     return await list_voices(lang)
 
 
