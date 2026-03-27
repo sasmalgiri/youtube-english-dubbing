@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { fetchVoices, type Voice } from '@/lib/api';
 
-export function useVoices(lang: string = 'hi') {
+export function useVoices(lang: string = 'en') {
     const [voices, setVoices] = useState<Voice[]>([]);
     const [loading, setLoading] = useState(true);
 

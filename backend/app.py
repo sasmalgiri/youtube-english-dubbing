@@ -1050,6 +1050,7 @@ async def create_job_upload(
             use_coqui_xtts=_bool(use_coqui_xtts),
             use_edge_tts=_bool(use_edge_tts),
             prefer_youtube_subs=_bool(prefer_youtube_subs),
+            use_yt_translate=_bool(use_yt_translate),
             multi_speaker=_bool(multi_speaker),
             transcribe_only=_bool(transcribe_only),
             audio_priority=_bool(audio_priority),
@@ -1057,6 +1058,7 @@ async def create_job_upload(
             encode_preset=encode_preset,
             split_duration=split_duration,
             fast_assemble=_bool(fast_assemble),
+            enable_manual_review=_bool(enable_manual_review),
         )
     except Exception:
         shutil.rmtree(job_dir, ignore_errors=True)
@@ -1268,6 +1270,7 @@ async def create_job_with_srt(
             encode_preset=encode_preset,
             split_duration=split_duration,
             fast_assemble=_bool(fast_assemble),
+            enable_manual_review=_bool(enable_manual_review),
         )
     except Exception:
         shutil.rmtree(job_dir, ignore_errors=True)

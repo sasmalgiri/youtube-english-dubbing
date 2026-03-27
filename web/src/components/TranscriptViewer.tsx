@@ -9,7 +9,7 @@ interface TranscriptViewerProps {
     targetLanguage?: string;
 }
 
-export default function TranscriptViewer({ jobId, targetLanguage = 'hi' }: TranscriptViewerProps) {
+export default function TranscriptViewer({ jobId, targetLanguage = 'en' }: TranscriptViewerProps) {
     const [segments, setSegments] = useState<TranscriptSegment[]>([]);
     const [loading, setLoading] = useState(true);
 

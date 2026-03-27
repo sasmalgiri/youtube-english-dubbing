@@ -8,7 +8,7 @@ interface VoiceSelectorProps {
     language?: string;
 }
 
-export default function VoiceSelector({ value, onChange, language = 'hi' }: VoiceSelectorProps) {
+export default function VoiceSelector({ value, onChange, language = 'en' }: VoiceSelectorProps) {
     const { voices, loading } = useVoices(language);
 
     return (

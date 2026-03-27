@@ -9,7 +9,7 @@ interface VideoPlayerProps {
     targetLanguage?: string;
 }
 
-export default function VideoPlayer({ originalUrl, dubbedUrl, targetLanguage = 'hi' }: VideoPlayerProps) {
+export default function VideoPlayer({ originalUrl, dubbedUrl, targetLanguage = 'en' }: VideoPlayerProps) {
     const [tab, setTab] = useState<'dubbed' | 'original'>('dubbed');
     const langName = getLanguageName(targetLanguage);
 
