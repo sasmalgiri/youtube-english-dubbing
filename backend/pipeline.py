@@ -1949,10 +1949,13 @@ class Pipeline:
 
     # ── Step 3b: Transcribe speech from audio ─────────────────────────────
     def _transcribe(self, wav_path: Path) -> List[Dict]:
-        """Transcribe speech from audio — tries Groq Whisper API first (30x faster),
-        falls back to local faster-whisper if no API key or API fails."""
+        """Transcribe speech from audio — always uses local faster-whisper for zero-spend.
+        Groq Whisper API available as opt-in speedup if GROQ_API_KEY is set."""
+        # Zero-spend default: always local. Groq API costs $0.04-0.11/hr.
+        # To use Groq for speed, set GROQ_WHISPER=1 alongside GROQ_API_KEY.
         groq_key = os.environ.get("GROQ_API_KEY", "").strip()
-        if groq_key:
+        use_groq_whisper = os.environ.get("GROQ_WHISPER", "").strip() == "1"
+        if groq_key and use_groq_whisper:
             try:
                 return self._transcribe_groq(wav_path, groq_key)
             except Exception as e:
@@ -2642,8 +2645,12 @@ class Pipeline:
         is_english_target = self.cfg.target_language == "en" or self.cfg.target_language.startswith("en-")
 
         if is_english_target:
-            # English target: LLM direct translation is best (no NLLB — it only does en→indic)
-            if len(turbo_engines) >= 2:
+            # English target: zero-spend priority = local first, then free APIs
+            # No NLLB/IndicTrans2 — it only does en→indic direction
+            if self._ollama_available():
+                self._report("translate", 0.05, "Using Ollama (local LLM) for English translation...")
+                self._translate_segments_ollama(segments)
+            elif len(turbo_engines) >= 2:
                 names = " + ".join(e[0] for e in turbo_engines)
                 self._report("translate", 0.05, f"TURBO: {names} parallel translation to English...")
                 self._translate_segments_turbo(segments, turbo_engines)
@@ -2653,18 +2660,14 @@ class Pipeline:
             elif sambanova_key:
                 self._report("translate", 0.05, "Using SambaNova for English translation...")
                 self._translate_segments_sambanova(segments, sambanova_key)
-            elif openai_key:
-                self._report("translate", 0.05, "Using GPT-4o for English translation...")
-                self._translate_segments_openai(segments, openai_key)
             elif gemini_key:
                 self._report("translate", 0.05, "Using Gemini for English translation...")
                 self._translate_segments_gemini(segments, gemini_key)
-            elif self._ollama_available():
-                self._report("translate", 0.05, "Using Ollama for English translation...")
-                self._translate_segments_ollama(segments)
             else:
-                self._report("translate", 0.1, "Using Google Translate for English...")
+                self._report("translate", 0.1, "Using Google Translate for English (free)...")
                 self._translate_segments_google(segments)
+            # English dubbing rewrite: polish translation for spoken delivery
+            self._english_dubbing_rewrite(segments)
         elif is_hindi and any_llm:
             # Best for Hindi: IndicTrans2 meaning model + LLM dubbing rewrite + rules
             self._report("translate", 0.02, "Auto: IndicTrans2 → LLM → Rules (best Hindi quality)...")
@@ -2700,6 +2703,161 @@ class Pipeline:
                     pass
             self._report("translate", 0.1, "Using Google Translate (free fallback)...")
             self._translate_segments_google(segments)
+
+    def _english_dubbing_rewrite(self, segments):
+        """Rewrite translated English text for natural spoken dubbing delivery.
+
+        Converts literal/stiff translations into punchy, conversational English
+        suitable for voice dubbing. Uses local Ollama first (zero-spend),
+        then free API engines, then skips if nothing available.
+        """
+        total = len(segments)
+        self._report("translate", 0.90, f"English dubbing rewrite ({total} segments)...")
+
+        rewrite_system = (
+            "You are an English DUBBING REWRITER for YouTube videos.\n"
+            "You receive translated English text that may sound stiff or literal.\n\n"
+            "REWRITE each line to sound like a native English YouTuber narrating:\n"
+            "1. Keep the EXACT SAME meaning — don't add or remove information\n"
+            "2. Use natural contractions: do not→don't, it is→it's, they are→they're\n"
+            "3. Use punchy, dramatic delivery: 'And that's when everything changed' not 'At that point things changed'\n"
+            "4. Short sentences. Natural pauses. Easy to say aloud.\n"
+            "5. Keep proper nouns, brands, technical terms unchanged\n"
+            "6. If a line is already natural, return it unchanged\n"
+            "7. Output ONLY numbered rewritten lines. No notes.\n"
+        )
+        rewrite_prefix = "REWRITE these into natural spoken English dubbing lines:\n\n"
+
+        # Try engines in order: Ollama (local, free) → Groq → SambaNova → Gemini → skip
+        engine_order = []
+        if self._ollama_available():
+            engine_order.append(("Ollama", None))
+        groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+        sambanova_key = os.environ.get("SAMBANOVA_API_KEY", "").strip()
+        gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if groq_key:
+            engine_order.append(("Groq", groq_key))
+        if sambanova_key:
+            engine_order.append(("SambaNova", sambanova_key))
+        if gemini_key:
+            engine_order.append(("Gemini", gemini_key))
+
+        if not engine_order:
+            self._report("translate", 0.95, "No rewrite engines available — using translations as-is")
+            return
+
+        batch_size = 40
+        total_batches = (total + batch_size - 1) // batch_size
+        engine_idx = 0
+
+        for batch_idx in range(total_batches):
+            start = batch_idx * batch_size
+            end = min(start + batch_size, total)
+            batch = segments[start:end]
+
+            lines = [f"{i+1}. {seg['text_translated']}" for i, seg in enumerate(batch)]
+            user_msg = rewrite_prefix + "\n".join(lines)
+
+            rewritten = None
+            for attempt in range(len(engine_order)):
+                eidx = (engine_idx + attempt) % len(engine_order)
+                name, key = engine_order[eidx]
+
+                self._report("translate", 0.90 + 0.08 * (batch_idx / total_batches),
+                             f"English rewrite: {name} — batch {batch_idx + 1}/{total_batches}")
+
+                try:
+                    if name == "Ollama":
+                        rewritten = self._ollama_rewrite_batch(
+                            rewrite_system, user_msg, len(batch))
+                    elif name == "Gemini":
+                        from google import genai
+                        client = genai.Client(api_key=key)
+                        response = client.models.generate_content(
+                            model="gemini-2.5-flash-preview-05-20",
+                            contents=rewrite_system + "\n\n" + user_msg)
+                        rewritten = self._parse_numbered_translations(response.text, len(batch))
+                    else:
+                        api_url, model = self.TURBO_ENGINE_CONFIG.get(name, (None, None))
+                        if not api_url:
+                            continue
+                        import requests as _requests
+                        resp = _requests.post(
+                            api_url,
+                            headers={"Authorization": f"Bearer {key}",
+                                     "Content-Type": "application/json"},
+                            json={
+                                "model": model,
+                                "messages": [
+                                    {"role": "system", "content": rewrite_system},
+                                    {"role": "user", "content": user_msg},
+                                ],
+                                "temperature": 0.7,
+                                "max_tokens": 8192,
+                            },
+                            timeout=60,
+                        )
+                        resp.raise_for_status()
+                        rewritten = self._parse_numbered_translations(
+                            resp.json()["choices"][0]["message"]["content"], len(batch))
+                except Exception:
+                    continue
+
+                if rewritten:
+                    engine_idx = eidx
+                    break
+
+            if rewritten:
+                for i, seg in enumerate(batch):
+                    if rewritten[i]:
+                        seg["text_translated"] = rewritten[i]
+
+        self._report("translate", 0.98, "English dubbing rewrite complete!")
+
+    def _ollama_rewrite_batch(self, system_msg: str, user_msg: str, expected_count: int):
+        """Send a rewrite batch to local Ollama. Returns list or None."""
+        import requests as _requests
+        try:
+            resp = _requests.get("http://localhost:11434/api/tags", timeout=2)
+            models = [m["name"] for m in resp.json().get("models", [])]
+        except Exception:
+            return None
+
+        # Pick best available model for English rewrite
+        model = None
+        preferred = ["qwen2.5:14b", "qwen2.5:32b", "llama3.1:8b", "llama3:8b",
+                      "gemma2:9b", "mistral:7b"]
+        for pref in preferred:
+            for m in models:
+                if pref.split(":")[0] in m:
+                    model = m
+                    break
+            if model:
+                break
+        if not model and models:
+            model = models[0]
+        if not model:
+            return None
+
+        try:
+            resp = _requests.post(
+                "http://localhost:11434/api/chat",
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": user_msg},
+                    ],
+                    "stream": False,
+                    "options": {"temperature": 0.7},
+                },
+                timeout=120,
+            )
+            resp.raise_for_status()
+            text = resp.json().get("message", {}).get("content", "")
+            return self._parse_numbered_translations(text, expected_count)
+        except Exception:
+            return None
 
     def _translate_segments_gemini(self, segments, api_key):
         """Translate segments in numbered batches using Gemini for context-aware output."""
